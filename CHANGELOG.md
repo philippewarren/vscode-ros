@@ -1,4 +1,11 @@
 # Changelog
+
+## 0.10.0
+## New Features
+* When launching a launch file, will now automatically stop all launched-only nodes when the last associated debug session is closed.
+* When launching a launch file, the `stopAll` option now allows to stop all other debug sessions when any of them is stopped.
+* When launching a launch file, the `launch` and `attachDebugger` options now allow to filter by node name and node namespace, in addition to node executable as before.
+
 ## 0.9.3
 zero change release to prime the pre-release channel for future test releases.
 

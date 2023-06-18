@@ -110,15 +110,29 @@ The ROS Launch configuration block supports the following configuration:
 | Option | Description |
 |---|:---|
 | name | The name which will be displayed in the VSCode UI launch configuration |
-| request | `launch` or `attach` for launching a ROS launch file, or attaching using the attach UI for Pyton or C++ |
+| request | `launch` or `attach` for launching a ROS launch file, or attaching using the attach UI for Python or C++ |
 | target | the launch file path |
 | type | must be `ros` to indicate to VSCode that this is a ROS launch configuration |
 | arguments | Arguments passed to roslaunch such as `map:=/foo.yaml'`|
 | symbolSearchPath | A semicolon delimited search path for Windows symbols, including ROS for Windows symbols downloaded from https://ros-win.visualstudio.com/ros-win/_build |
 | additionalSOLibSearchPath | A semicolon delimited search path for Linux symbols |
 | sourceFileMap | A mapping of Source files from where Symbols expect and the location you have on disk. |
-| launch | If specified, a list of executables to just launch, attaching to everything else. e.g. `"launch": ["rviz", "gz", "gzserver", "gzclient"]` which prevents attaching a debugger to rviz and gazebo. NOTE: the debugger will ignore file extension: x.py is the same as x.exe. |
-| attachDebugger | If specified, a list of executables to debug. `"attachDebugger": ["my_ros_node"]` will only attach to my_ros_node.exe, my_ros_node.py or my_ros_node. |
+| launch | If specified, a list of executables or node names or namespaces to just launch, attaching to everything else. e.g. `"launch": ["rviz", "gz", "gzserver", "gzclient"]` which prevents attaching a debugger to rviz and gazebo. See [this table](#format-of-entries-for-the-launch-and-attachDebugger-options) for accpeted formats. |
+| attachDebugger | If specified, a list of executables or node names or namespaces to debug. See [this table](#format-of-entries-for-the-launch-and-attachDebugger-options) for for accpeted formats. |
+| stopAll | If true, will stop all nodes when one debugger is stopped, defaults to `false`. |
+
+#### Format of entries for the `launch` and `attachDebugger` options
+The `launch` and `attachDebugger` options support the following formats:
+| Format | Kind | Description |
+|---|:---|:---|
+| `["my_ros_node"]` | Executable | Will only attach to or launch executables named `my_ros_node.exe`, `my_ros_node.py` or `my_ros_node` (file extensions are ignored). |
+| `["/my_node_name"]` | Node name stem | Will only attach to or launcho a node matching `/my_node_name` or `/**/my_node_name`. |
+| `["my_namespace/my_node_name"]` | Node name in namespace | Will only attach to or launch nodes matching `/**/my_namespace/my_node_name`. |
+| `["my_top_namespace/my_namespace/my_node_name"]` | Node name in namespace (nested) | Will only attach to or launch nodes matching `/**/my_top_namespace/my_namespace/my_node_name`. |
+| `["/my_namespace/"]` | Namespace | Will only attach to or launch nodes matching `/my_namespace/**`. |
+| `["/my_top_namespace/my_namespace/"]` | Namespace (nested) | Will only attach to or launch nodes matching `/my_top_namespace/my_namespace/**`. |
+| `["/my_top_namespace/my_namespace/my_node_name"]` | Fully qualified name | Will only attach to or launch nodes matching `/my_top_namespace/my_namespace/my_node_name`. |
+
 
 ### Workspace and Global Settings
 The ROS extension supports the following global settings, which can be overridden in the workspace.

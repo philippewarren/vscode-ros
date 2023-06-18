@@ -2,35 +2,12 @@
 // Licensed under the MIT License.
 
 import * as child_process from "child_process";
-import * as fs from "fs";
-import * as yaml from "js-yaml";
-import * as os from "os";
 import * as path from "path";
-import * as readline from "readline";
-import * as shell_quote from "shell-quote";
-import * as tmp from "tmp";
-import * as util from "util";
 import * as vscode from "vscode";
 
 import * as extension from "../../../../extension";
 import * as requests from "../../../requests";
-import * as utils from "../../../utils";
-import { rosApi } from "../../../../ros/ros";
 
-const promisifiedExec = util.promisify(child_process.exec);
-
-interface ILaunchRequest {
-    nodeName: string;
-    executable: string;
-    arguments: string[];
-    cwd: string;
-    env: { [key: string]: string };
-    symbolSearchPath?: string;
-    additionalSOLibSearchPath?: string;
-    sourceFileMap?: { [key: string]: string };
-    launch?: string[];    // Scripts or executables to just launch without attaching a debugger
-    attachDebugger?: string[];    // If specified, Scripts or executables to debug; otherwise attaches to everything not ignored
-}
 
 function getExtensionFilePath(extensionFile: string): string {
     return path.resolve(extension.extPath, extensionFile);

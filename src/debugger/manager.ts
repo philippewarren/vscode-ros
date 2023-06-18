@@ -47,10 +47,41 @@ class RosDebugManager implements vscode.DebugConfigurationProvider {
             }
         }
     }
+
+    public async addDebugSession(session: vscode.DebugSession) {
+        const config = session.configuration;
+
+        if (config.request !== "launch") {
+            return;
+        }
+
+        if ((typeof extension.env.ROS_VERSION === "undefined") || (extension.env.ROS_VERSION.trim() == "1")) {
+            return this.ros1LaunchResolver.sessionStarted(session);
+        } else {
+            return this.ros2LaunchResolver.sessionStarted(session);
+        }
+
+    }
+
+    public async debugSessionStopped(stopped_session: vscode.DebugSession) {
+        const config = stopped_session.configuration;
+
+        if (config.request !== "launch") {
+            return;
+        }
+
+        if ((typeof extension.env.ROS_VERSION === "undefined") || (extension.env.ROS_VERSION.trim() == "1")) {
+            return await this.ros1LaunchResolver.sessionStopped(stopped_session);
+        } else {
+            return await this.ros2LaunchResolver.sessionStopped(stopped_session);
+        }
+    }
 }
 
 export function registerRosDebugManager(context: vscode.ExtensionContext): void {
     var rosProvider = new RosDebugManager();
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("ros", rosProvider, vscode.DebugConfigurationProviderTriggerKind.Initial));
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("ros", rosProvider, vscode.DebugConfigurationProviderTriggerKind.Dynamic));
+    context.subscriptions.push(vscode.debug.onDidStartDebugSession(rosProvider.addDebugSession, rosProvider));
+    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(rosProvider.debugSessionStopped, rosProvider));
 }

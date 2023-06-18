@@ -1,6 +1,6 @@
 {
     "name": "vscode-ros",
-    "version": "0.9.4",
+    "version": "0.10.0-dev",
     "publisher": "ms-iot",
     "engines": {
         "vscode": "^1.69.0"
@@ -209,13 +209,18 @@
                             },
                             "launch": {
                                 "type": "array",
-                                "description": "A list of Scripts or executables to just launch without attaching a debugger",
+                                "description": "A list of Scripts or executables or node names or namespaces to just launch without attaching a debugger",
                                 "default": ""
                             },
                             "attachDebugger": {
                                 "type": "array",
-                                "description": "A specific list of executables to just attach a debugger. Useful for large compostions with where only a few nodes need to be debugged",
+                                "description": "A specific list of executables or node names or namespaces to just attach a debugger. Useful for large compositions where only a few nodes need to be debugged",
                                 "default": ""
+                            },
+                            "stopAll": {
+                                "type": "boolean",
+                                "description": "Stop all nodes when one debugger is stopped",
+                                "default": false
                             }
                         }
                     },

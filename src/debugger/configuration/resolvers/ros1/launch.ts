@@ -9,31 +9,16 @@ import * as path from "path";
 import * as readline from "readline";
 import * as shell_quote from "shell-quote";
 import * as tmp from "tmp";
-import * as util from "util";
 import * as vscode from "vscode";
 
 import * as extension from "../../../../extension";
 import * as requests from "../../../requests";
-import * as utils from "../../../utils";
 import { rosApi } from "../../../../ros/ros";
-import { env } from "../../../../extension";
 
-const promisifiedExec = util.promisify(child_process.exec);
+import { ILaunchRequest, promisifiedExec, RosLaunchDebugConfigurationProvider, parseCommand, executableOrNodeMatchWhitelist } from "../common";
 
-interface ILaunchRequest {
-    nodeName: string;
-    executable: string;
-    arguments: string[];
-    cwd: string;
-    env: { [key: string]: string };
-    symbolSearchPath?: string;
-    additionalSOLibSearchPath?: string;
-    sourceFileMap?: { [key: string]: string };
-    launch?: string[];    // Scripts or executables to just launch without attaching a debugger
-    attachDebugger?: string[];    // If specified, Scripts or executables to debug; otherwise attaches to everything not ignored
-}
+export class LaunchResolver extends RosLaunchDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
 
-export class LaunchResolver implements vscode.DebugConfigurationProvider {
     // tslint:disable-next-line: max-line-length
     public async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: requests.ILaunchRequest, token?: vscode.CancellationToken) {
         if (!path.isAbsolute(config.target) || (path.extname(config.target) !== ".launch" && path.extname(config.target) !== ".test")) {
@@ -52,7 +37,7 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             const timeout_ms: number = 30000;
             const interval_ms: number = 100;
             let timeWaited: number = 0;
-            while (await rosApi.getCoreStatus() == false && 
+            while (await rosApi.getCoreStatus() == false &&
                 timeWaited < timeout_ms) {
                 timeWaited += interval_ms;
                 await delay(interval_ms);
@@ -68,11 +53,13 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
         const rosExecOptions: child_process.ExecOptions = {
             env: await extension.resolvedEnv(),
         };
+        const rosSpawnOptions: child_process.SpawnOptions = {
+            env: await extension.resolvedEnv(),
+        };
 
         // If the configuration has arguments,
-        let configArgs :string = "";
-        if (config.arguments)
-        {
+        let configArgs: string = "";
+        if (config.arguments) {
             configArgs = config.arguments.join(' ');
         }
 
@@ -104,22 +91,28 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target} ${configArgs}\" in a ros terminal.`));
         }
 
+        this.registerLaunchRequest(config);
+
         const nodes = result.stdout.trim().split(os.EOL);
         await Promise.all(nodes.map((node: string) => {
             return promisifiedExec(`roslaunch --args ${node} ${config.target} ${configArgs}`, rosExecOptions);
-        })).then((commands: Array<{ stdout: string; stderr: string; }>) => {
+        })).then(async (commands: Array<{ stdout: string; stderr: string; }>) => {
+            var debug_count = 0;
             commands.forEach(async (command, index) => {
                 const launchRequest = this.generateLaunchRequest(nodes[index], command.stdout, config);
                 if (launchRequest != null) {
-                  this.executeLaunchRequest(launchRequest, false);
+                    this.executeLaunchRequest(launchRequest, false);
+                    debug_count++;
                 } else {
-                    const process = child_process.exec(command.stdout, rosExecOptions, (err, out) => {
-                        if (err) {
-                            throw (new Error(`Error from ${command.stdout}:\r\n ${err}`));
-                        }
-                    })
+                    this.addProcess(command.stdout, rosSpawnOptions);
                 }
             });
+            if (debug_count !== 0) {
+                this.startProcesses();
+            }
+            else {
+                this.clearProcesses();
+            }
         });
         // @todo: error handling for Promise.all
 
@@ -127,84 +120,48 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
         return null;
     }
 
-
     private generateLaunchRequest(nodeName: string, command: string, config: requests.ILaunchRequest): ILaunchRequest {
-        let parsedArgs: shell_quote.ParseEntry[];
-        const isWindows = os.platform() === "win32";
-
-        if (isWindows) {
-            // https://github.com/ros/ros_comm/pull/1809
-            // escape backslash in file path
-            parsedArgs = shell_quote.parse(command.replace(/[\\]/g, "\\$&"));
-            parsedArgs = shell_quote.parse(parsedArgs[2].toString().replace(/[\\]/g, "\\$&"));
-        } else {
-            parsedArgs = shell_quote.parse(command);
-        }
-
-        const envConfig: { [key: string]: string; } = {};
-        while (parsedArgs) {
-            // https://github.com/ros/ros_comm/pull/1809
-            if (isWindows && parsedArgs[0].toString() === "set") {
-                parsedArgs.shift();
-            }
-            if (parsedArgs[0].toString().includes("=")) {
-                const arg = parsedArgs.shift().toString();
-                envConfig[arg.substring(0, arg.indexOf("="))] = arg.substring(arg.indexOf("=") + 1);
-
-                // https://github.com/ros/ros_comm/pull/1809
-                // "&&" is treated as Object
-                if (isWindows && parsedArgs[0] instanceof Object) {
-                    parsedArgs.shift();
-                }
-            } else {
-                break;
-            }
-        }
-
-        let executable = parsedArgs.shift().toString();
+        const { executable, args, envConfig } = parseCommand(command);
 
         // return rviz instead of rviz.exe, or spawner instead of spawner.py
-         // This allows the user to run filter out genericly. 
+        // This allows the user to run filter out genericly. 
         let executableName = path.basename(executable, path.extname(executable));
 
 
 
         // If this executable is just launched, don't attach a debugger.
-        if (config.launch && 
-            config.launch.indexOf(executableName) != -1) {
-          return null;
+        if (config.launch && executableOrNodeMatchWhitelist(config.launch, executableName, nodeName)) {
+            return null;
         }
 
         // Filter shell scripts - just launch them
         //  https://github.com/ms-iot/vscode-ros/issues/474 
         let executableExt = path.extname(executable);
-        if (executableExt && 
+        if (executableExt &&
             ["bash", "sh", "bat", "cmd", "ps1"].includes(executableExt)) {
-          return null;
+            return null;
         }
 
         // If a specific list of nodes is specified, then determine if this is one of them.
-        // If no specific nodes specifed, attach to all unless specifically ignored., 
-        if (config.attachDebugger == null ||
-            config.attachDebugger.indexOf(executableName) != -1) {
+        // If no specific nodes specifed, attach to all unless specifically ignored.
+        if (config.attachDebugger == null || executableOrNodeMatchWhitelist(config.attachDebugger, executableName, nodeName)) {
 
-          const request: ILaunchRequest = {
-              nodeName: nodeName,
-              executable: executable,
-              arguments: parsedArgs.map((arg) => {
-                  return arg.toString();
-              }),
-              cwd: ".",
-              env: {
-                  ...extension.env,
-                  ...envConfig,
-              },
-              symbolSearchPath: config.symbolSearchPath, 
-              additionalSOLibSearchPath: config.additionalSOLibSearchPath, 
-              sourceFileMap: config.sourceFileMap
+            const request: ILaunchRequest = {
+                nodeName: nodeName,
+                executable: executable,
+                arguments: args,
+                cwd: ".",
+                env: {
+                    ...extension.env,
+                    ...envConfig,
+                },
+                symbolSearchPath: config.symbolSearchPath,
+                additionalSOLibSearchPath: config.additionalSOLibSearchPath,
+                sourceFileMap: config.sourceFileMap,
+                stopAll: config.stopAll,
 
-          };
-          return request;
+            };
+            return request;
         }
 
         return null;
@@ -341,7 +298,7 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
                                 description: "Enable pretty-printing for gdb",
                                 ignoreFailures: true
                             }
-                        ]
+                        ],
                     };
                     debugConfig = cppdbgLaunchConfig;
                 }
