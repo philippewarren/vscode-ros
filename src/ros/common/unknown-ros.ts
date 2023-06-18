@@ -63,8 +63,8 @@ export class UnknownROS implements ros.ROSApi {
     }
 
     public rosdep() {
-      console.error("Unknown ROS distro.");
-      return;
+        console.error("Unknown ROS distro.");
+        return;
     }
 
     public activateCoreMonitor(): vscode.Disposable {
@@ -77,7 +77,7 @@ export class UnknownROS implements ros.ROSApi {
         return;
     }
 
-    public activateRosrun(packageName: string, executableName:string, argument: string): vscode.Terminal {
+    public activateRosrun(packageName: string, executableName: string, argument: string): vscode.Terminal {
         console.error("Unknown ROS distro.");
         return;
     }
@@ -86,7 +86,7 @@ export class UnknownROS implements ros.ROSApi {
         console.error("Unknown ROS distro.");
         return;
     }
-    
+
     public activateRostest(launchFilepath: string, argument: string): vscode.Terminal {
         console.error("Unknown ROS distro.");
         return;

@@ -134,7 +134,7 @@ export class ROS1 implements ros.ROSApi {
             const dirs = `catkin_find --without-underlays --share '${packageName}'`;
             command = `find -L $(${dirs}) -type f -name *.test`;
         }
-        
+
         return new Promise((c, e) => child_process.exec(command, { env: this.env }, (err, out) => {
             err ? e(err) : c(out.trim().split(os.EOL));
         }));
@@ -168,11 +168,11 @@ export class ROS1 implements ros.ROSApi {
     }
 
     public rosdep(): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
-      this.setTerminalEnv(terminal,this.env);
-      terminal.sendText(`rosdep install --from-paths src --ignore-src -r -y`);
-      return terminal;
-  }
+        const terminal = ros_utils.createTerminal(this.context);
+        this.setTerminalEnv(terminal, this.env);
+        terminal.sendText(`rosdep install --from-paths src --ignore-src -r -y`);
+        return terminal;
+    }
 
 
     public showCoreMonitor() {
@@ -180,29 +180,29 @@ export class ROS1 implements ros.ROSApi {
     }
 
     public activateRosrun(packageName: string, executableName: string, argument: string): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
-        this.setTerminalEnv(terminal,this.env);
+        const terminal = ros_utils.createTerminal(this.context);
+        this.setTerminalEnv(terminal, this.env);
         terminal.sendText(`rosrun ${packageName} ${executableName} ${argument}`);
         return terminal;
     }
 
     public activateRoslaunch(launchFilepath: string, argument: string): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
-        this.setTerminalEnv(terminal,this.env);
+        const terminal = ros_utils.createTerminal(this.context);
+        this.setTerminalEnv(terminal, this.env);
         terminal.sendText(`roslaunch ${launchFilepath} ${argument}`);
         return terminal;
     }
 
     public activateRostest(launchFilepath: string, argument: string): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
-        this.setTerminalEnv(terminal,this.env);
+        const terminal = ros_utils.createTerminal(this.context);
+        this.setTerminalEnv(terminal, this.env);
         terminal.sendText(`rostest ${launchFilepath} ${argument}`);
         return terminal;
     }
 
-    public setTerminalEnv(terminal:vscode.Terminal,env: any) {
-        if (process.platform === "linux"){
-            for(var item in env){
+    public setTerminalEnv(terminal: vscode.Terminal, env: any) {
+        if (process.platform === "linux") {
+            for (var item in env) {
                 terminal.sendText(`export ${item}=${env[item]} >/dev/null`);
             }
         }
@@ -217,7 +217,7 @@ export class ROS1 implements ros.ROSApi {
                     const normalizedPath = path.win32.normalize(foundPath);
                     findFilePromises.push(new Promise((found) => child_process.exec(
                         `where /r "${normalizedPath}" ` + pattern, { env: this.env }, (innerErr, innerOut) =>
-                            innerErr ? found(null) : found(innerOut.trim().split(os.EOL)),
+                        innerErr ? found(null) : found(innerOut.trim().split(os.EOL)),
                     )));
                 });
 

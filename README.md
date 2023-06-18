@@ -120,6 +120,10 @@ The ROS Launch configuration block supports the following configuration:
 | launch | If specified, a list of executables or node names or namespaces to just launch, attaching to everything else. e.g. `"launch": ["rviz", "gz", "gzserver", "gzclient"]` which prevents attaching a debugger to rviz and gazebo. See [this table](#format-of-entries-for-the-launch-and-attachDebugger-options) for accpeted formats. |
 | attachDebugger | If specified, a list of executables or node names or namespaces to debug. See [this table](#format-of-entries-for-the-launch-and-attachDebugger-options) for for accpeted formats. |
 | stopAll | If true, will stop all nodes when one debugger is stopped, defaults to `false`. |
+| stopCoreAfterDebug |  If true, stop the roscore if started automatically when all debugged nodes are stopped, to cleanup the zombie nodes created by the C++ debugger using SIGKILL to terminate the debugged process, defaults to `false`. |
+| stopLaunchedNodes | If true, will stop all processes launched by the debugger when the last debugged node is stopped, defaults to `true`. |
+| attachTerminalsToProcesses | If true, will create terminals to display the output of the launched nodes, defaults to `true`. |
+| terminateOnTerminalClosed | If true, will terminate the launched nodes when the associated terminal is closed, only relevant with `attachTerminalsToProcesses`, defaults to `true`. |
 
 #### Format of entries for the `launch` and `attachDebugger` options
 The `launch` and `attachDebugger` options support the following formats:

@@ -85,7 +85,7 @@ export interface ROSApi {
     /**
      * Activate a terminal for rosrun.
      */
-    activateRosrun: (packageName: string, executableName:string, argument: string) => vscode.Terminal;
+    activateRosrun: (packageName: string, executableName: string, argument: string) => vscode.Terminal;
 
     /**
      * Activate a terminal for roslaunch.
@@ -106,7 +106,7 @@ export let rosApi: ROSApi = unknownRosApi;
 
 export function selectROSApi(version: string) {
     rosApi = unknownRosApi;
-    switch(version.trim()) {
+    switch (version.trim()) {
         case "1": {
             rosApi = ros1Api;
             break;

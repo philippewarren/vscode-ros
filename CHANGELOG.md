@@ -2,8 +2,12 @@
 
 ## 0.10.0
 ## New Features
-* When launching a launch file, will now automatically stop all launched-only nodes when the last associated debug session is closed.
-* When launching a launch file, the `stopAll` option now allows to stop all other debug sessions when any of them is stopped.
+* Whole bunch of new options when launching a launch file:
+    * The `stopAll` option now allows to stop all other debug sessions when any of them is stopped.
+    * The `stopCoreAfterDebug` allow to stop the core when the last debug session is stopped, if it was started automatically when the debug session was launched.
+    * The `stopLaunchedNodes` option will now automatically stop all launched-only nodes when the last associated debug session is closed.
+    * The `attachTerminalsToProcesses` option will now automatically attach the launched-only nodes to terminals.
+        * The `terminateOnTerminalClosed` option will now automatically terminate the launched-only nodes when the associated terminal is closed.
 * When launching a launch file, the `launch` and `attachDebugger` options now allow to filter by node name and node namespace, in addition to node executable as before.
 
 ## 0.9.3

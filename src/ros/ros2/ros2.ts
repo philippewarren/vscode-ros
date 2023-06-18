@@ -107,25 +107,25 @@ export class ROS2 implements ros.ROSApi {
     public findPackageExecutables(packageName: string): Promise<string[]> {
         return new Promise((resolve, reject) => child_process.exec(
             `ros2 pkg executables ${packageName}`, { env: this.env }, (err, out) => {
-            if (!err) {
-                const lines = out.trim().split(os.EOL).map(((line) => {
-                    const info: string[] = line.split(" ");
-                    if (info.length === 2) {
-                        // each line should contain exactly 2 strings separated by 1 space
-                        return info;
-                    }
-                }));
+                if (!err) {
+                    const lines = out.trim().split(os.EOL).map(((line) => {
+                        const info: string[] = line.split(" ");
+                        if (info.length === 2) {
+                            // each line should contain exactly 2 strings separated by 1 space
+                            return info;
+                        }
+                    }));
 
-                const packageInfoReducer = (acc: string[], cur: string[]) => {
-                    const executableName: string = cur[1] as string;
-                    acc.push(executableName);
-                    return acc;
-                };
-                resolve(lines.reduce(packageInfoReducer, []));
-            } else {
-                reject(err);
-            }
-        }));
+                    const packageInfoReducer = (acc: string[], cur: string[]) => {
+                        const executableName: string = cur[1] as string;
+                        acc.push(executableName);
+                        return acc;
+                    };
+                    resolve(lines.reduce(packageInfoReducer, []));
+                } else {
+                    reject(err);
+                }
+            }));
     }
 
     public async findPackageLaunchFiles(packageName: string): Promise<string[]> {
@@ -161,10 +161,10 @@ export class ROS2 implements ros.ROSApi {
     }
 
     public rosdep(): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
-      terminal.sendText(`rosdep install --from-paths src --ignore-src -r -y`);
-      return terminal;
-  }
+        const terminal = ros_utils.createTerminal(this.context);
+        terminal.sendText(`rosdep install --from-paths src --ignore-src -r -y`);
+        return terminal;
+    }
 
     public activateCoreMonitor(): vscode.Disposable {
         const coreStatusItem = new daemon.StatusBarItem();
@@ -177,13 +177,13 @@ export class ROS2 implements ros.ROSApi {
     }
 
     public activateRosrun(packageName: string, executableName: string, argument: string): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
+        const terminal = ros_utils.createTerminal(this.context);
         terminal.sendText(`ros2 run ${packageName} ${executableName} ${argument}`);
         return terminal;
     }
 
     public activateRoslaunch(launchFilepath: string, argument: string): vscode.Terminal {
-      const terminal = ros_utils.createTerminal(this.context);
+        const terminal = ros_utils.createTerminal(this.context);
         terminal.sendText(`ros2 launch ${launchFilepath} ${argument}`);
         return terminal;
     }

@@ -221,6 +221,26 @@
                                 "type": "boolean",
                                 "description": "Stop all nodes when one debugger is stopped",
                                 "default": false
+                            },
+                            "stopCoreAfterDebug": {
+                                "type": "boolean",
+                                "description": "Stop the roscore if started automatically when all debugged nodes are stopped, to cleanup the zombie nodes",
+                                "default": false
+                            },
+                            "stopLaunchedNodes": {
+                                "type": "boolean",
+                                "description": "Stop the launched nodes when the last debugged node is stopped",
+                                "default": true
+                            },
+                            "attachTerminalsToProcesses": {
+                                "type": "boolean",
+                                "description": "Create terminals to display the output of the launched nodes",
+                                "default": true
+                            },
+                            "terminateOnTerminalClosed": {
+                                "type": "boolean",
+                                "description": "Terminate the launched nodes when the associated terminal is closed, only relevant with `attachTerminalsToProcesses`",
+                                "default": true
                             }
                         }
                     },

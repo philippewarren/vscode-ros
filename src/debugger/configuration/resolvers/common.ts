@@ -9,6 +9,7 @@ import * as vscode from "vscode";
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import * as requests from "../../requests";
+import { rosApi } from "../../../ros/ros";
 
 
 export const promisifiedExec = util.promisify(child_process.exec);
@@ -22,14 +23,17 @@ export interface ILaunchRequest {
     symbolSearchPath?: string;
     additionalSOLibSearchPath?: string;
     sourceFileMap?: { [key: string]: string };
-    launch?: string[];    // Scripts or executables to just launch without attaching a debugger
-    attachDebugger?: string[];    // If specified, scripts, executables or nodes to debug; otherwise attaches to everything not ignored
-    stopAll?: boolean;    // If true, stop all nodes when the debugger is stopped
-    languageSpecificProperties: { [key: string]: any }; // Passed directly to the underlying debug adapter
+    launch?: string[];                      // Scripts or executables to just launch without attaching a debugger
+    attachDebugger?: string[];              // If specified, scripts, executables or nodes to debug; otherwise attaches to everything not ignored
+    stopAll?: boolean;                      // If true, stop all nodes when the debugger is stopped
+    stopCoreAfterDebug?: boolean;           // If true, stop the roscore when the last debugger node is stopped
+    stopLaunchedNodes?: boolean;            // If true, stop the launched nodes when the last debugged node is stopped
+    attachTerminalsToProcesses?: boolean;   // If true, create terminals to display the output of the launched nodes
+    terminateOnTerminalClosed?: boolean;    // If true, terminate the launched nodes when the terminal is closed
 }
 
 export class RosLaunchDebugConfigurationProvider {
-    private processesToLaunch: Array<{ command: string; rosSpawnOptions: child_process.SpawnOptions; }> = [];
+    private processesToLaunch: Array<{ nodeName: string, command: string; rosSpawnOptions: child_process.SpawnOptions; }> = [];
     private launchGroupHandler: LaunchGroupHandler = new LaunchGroupHandler();
 
     public sessionStarted(session: vscode.DebugSession) {
@@ -40,13 +44,13 @@ export class RosLaunchDebugConfigurationProvider {
         await this.launchGroupHandler.sessionStopped(stopped_session);
     }
 
-    public addProcess(command: string, rosSpawnOptions: child_process.SpawnOptions) {
-        this.processesToLaunch.push({ command: command, rosSpawnOptions: rosSpawnOptions });
+    public addProcess(nodeName: string, command: string, rosSpawnOptions: child_process.SpawnOptions) {
+        this.processesToLaunch.push({ nodeName: nodeName, command: command, rosSpawnOptions: rosSpawnOptions });
     }
 
     public startProcesses() {
         this.processesToLaunch.forEach((processToLaunch) => {
-            this.launchGroupHandler.executeSpawnProcess(processToLaunch.command, processToLaunch.rosSpawnOptions);
+            this.launchGroupHandler.executeSpawnProcess(processToLaunch.nodeName, processToLaunch.command, processToLaunch.rosSpawnOptions);
         });
         this.clearProcesses();
     }
@@ -55,17 +59,23 @@ export class RosLaunchDebugConfigurationProvider {
         this.processesToLaunch = [];
     }
 
-    public registerLaunchRequest(launchRequest: requests.ILaunchRequest) {
-        this.launchGroupHandler.setStopAll(launchRequest.stopAll);
+    public async registerLaunchRequest(launchRequest: requests.ILaunchRequest) {
+        this.launchGroupHandler.configure(launchRequest);
+        await this.launchGroupHandler.clearTerminals();
     }
 }
 
 export class LaunchGroupHandler {
     private sessions: Array<vscode.DebugSession> = [];
     private processes: Array<child_process.ChildProcess> = [];
+    private terminals: Array<vscode.Terminal> = [];
     private stopping: boolean = false;
     private processesErrorListeners: { [command: string]: (error: string) => void } = {};
-    private stopAll: boolean | undefined;
+    private stopAll: boolean = false;
+    private stopCoreAfterDebug: boolean = false;
+    private stopLaunchedNodes: boolean = true;
+    private attachTerminalsToProcesses: boolean = true;
+    private terminateOnTerminalClosed: boolean = true;
 
     private processErrorListener(command: string): (error: string) => void {
         if (this.processesErrorListeners[command] === undefined) {
@@ -77,9 +87,21 @@ export class LaunchGroupHandler {
     }
 
     private async stopAllProcesses() {
-        return Promise.all(this.processes.map(async (p) => {
-            await this.killProcess(p);
+        if (this.stopLaunchedNodes !== false)
+            await Promise.all(this.processes.map(async (p) => {
+                await this.killProcess(p);
+            }));
+        if (await rosApi.getCoreStatus() === true && this.stopCoreAfterDebug === true) {
+            rosApi.stopCore();
+        }
+        this.processes = [];
+    }
+
+    public async clearTerminals() {
+        await Promise.all(this.terminals.map(async (terminal) => {
+            terminal.dispose();
         }));
+        this.terminals = [];
     }
 
     public sessionStarted(session: vscode.DebugSession) {
@@ -88,34 +110,29 @@ export class LaunchGroupHandler {
 
     public async sessionStopped(stopped_session: vscode.DebugSession) {
 
-        if (this.stopAll === false) {
-            this.sessions = this.sessions.filter((session) => session.id !== stopped_session.id);
-
-            if (this.sessions.length === 0) {
-                await this.stopAllProcesses();
-                this.processes = [];
-                this.stopAll = undefined;
-            }
-        } else {
+        if (this.stopAll === true) {
             if (this.stopping === true) { // Don't recursively stop
                 return;
             }
 
             this.stopping = true;
 
-            await Promise.all([
-                Promise.all(this.sessions.map(async (session) => {
-                    if (session.id !== stopped_session.id) { // Don't stop the session that just stopped
-                        await vscode.debug.stopDebugging(session);
-                    }
-                })),
-                await this.stopAllProcesses(),
-            ]);
+            await Promise.all(this.sessions.map(async (session) => {
+                if (session.id !== stopped_session.id) { // Don't stop the session that just stopped
+                    await vscode.debug.stopDebugging(session);
+                }
+            }));
+            await this.stopAllProcesses();
 
             this.sessions = [];
-            this.processes = [];
-            this.stopAll = undefined;
             this.stopping = false;
+
+        } else {
+            this.sessions = this.sessions.filter((session) => session.id !== stopped_session.id);
+
+            if (this.sessions.length === 0) {
+                await this.stopAllProcesses();
+            }
         }
     }
 
@@ -123,8 +140,12 @@ export class LaunchGroupHandler {
         this.processes.push(process);
     }
 
-    public setStopAll(stopAll: boolean | undefined) {
-        this.stopAll = stopAll;
+    public configure(config: requests.ILaunchRequest) {
+        this.stopAll = config.stopAll;
+        this.stopCoreAfterDebug = config.stopCoreAfterDebug;
+        this.stopLaunchedNodes = config.stopLaunchedNodes;
+        this.attachTerminalsToProcesses = config.attachTerminalsToProcesses;
+        this.terminateOnTerminalClosed = config.terminateOnTerminalClosed;
     }
 
     private async killProcess(p: child_process.ChildProcess) {
@@ -156,9 +177,75 @@ export class LaunchGroupHandler {
         p.kill("SIGKILL");
     }
 
-    public executeSpawnProcess(command: string, rosSpawnOptions: child_process.SpawnOptions) {
+    public executeSpawnProcess(nodeName: string, command: string, rosSpawnOptions: child_process.SpawnOptions) {
         const { executable, args, envConfig } = parseCommand(command);
-        this.processes.push(child_process.spawn(executable, args, rosSpawnOptions).on('error', this.processErrorListener(command)));
+
+        if (this.attachTerminalsToProcesses !== false) {
+            // We want the output unbuffered, so we can display it in the terminal as it comes in
+            rosSpawnOptions.env["PYTHONUNBUFFERED"] = "1";
+            rosSpawnOptions.env["ROSCONSOLE_STDOUT_LINE_BUFFERED"] = "1";
+        }
+
+        const child = child_process.spawn(executable, args, rosSpawnOptions);
+
+        child.on('error', this.processErrorListener(command));
+
+        if (this.attachTerminalsToProcesses !== false) {
+
+            var on_close: () => void;
+            if (this.terminateOnTerminalClosed !== false) {
+                on_close = () => {
+                    this.processes = this.processes.filter((p) => p.pid !== child.pid);
+                    this.killProcess(child);
+                };
+            }
+            else {
+                on_close = () => { };
+            }
+
+            const writeEmitter = new vscode.EventEmitter<string>();
+            const terminal = vscode.window.createTerminal({
+                name: nodeName,
+                pty: {
+                    onDidWrite: writeEmitter.event,
+                    close: on_close,
+                    open: () => { },
+                }
+            });
+
+            // rospy (via rosgraph/roslogging.py) does not add color if the output is not a tty, so we add it back here
+            const printToTerminal = (data: string) => {
+                const loggingLevelToColor = {
+                    'DEBUG': '\x1b[32m',
+                    'INFO': null,
+                    'WARN': '\x1b[33m',
+                    'ERROR': '\x1b[31m',
+                    'FATAL': '\x1b[31m',
+                }
+                const colorReset = '\x1b[0m'
+
+                const line = data.replace('\n', '');
+
+                for (const [level, color] of Object.entries(loggingLevelToColor)) {
+                    if (line.indexOf(`[${level}]`) !== -1) {
+                        if (color !== null && line.indexOf(color) === -1) {
+                            writeEmitter.fire(`${color}${line}${colorReset}\r\n`);
+                            return;
+                        }
+                    }
+                }
+                writeEmitter.fire(`${line}\r\n`);
+            }
+
+            child.stdout.setEncoding('utf8');
+            child.stderr.setEncoding('utf8');
+            child.stdout.on('data', printToTerminal);
+            child.stderr.on('data', printToTerminal);
+
+            this.terminals.push(terminal);
+        }
+
+        this.processes.push(child);
     }
 }
 

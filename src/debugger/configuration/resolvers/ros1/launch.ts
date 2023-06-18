@@ -7,7 +7,6 @@ import * as yaml from "js-yaml";
 import * as os from "os";
 import * as path from "path";
 import * as readline from "readline";
-import * as shell_quote from "shell-quote";
 import * as tmp from "tmp";
 import * as vscode from "vscode";
 
@@ -91,22 +90,22 @@ export class LaunchResolver extends RosLaunchDebugConfigurationProvider implemen
             throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target} ${configArgs}\" in a ros terminal.`));
         }
 
-        this.registerLaunchRequest(config);
+        await this.registerLaunchRequest(config);
 
         const nodes = result.stdout.trim().split(os.EOL);
         await Promise.all(nodes.map((node: string) => {
             return promisifiedExec(`roslaunch --args ${node} ${config.target} ${configArgs}`, rosExecOptions);
         })).then(async (commands: Array<{ stdout: string; stderr: string; }>) => {
             var debug_count = 0;
-            commands.forEach(async (command, index) => {
+            await Promise.all(commands.map(async (command, index) => {
                 const launchRequest = this.generateLaunchRequest(nodes[index], command.stdout, config);
                 if (launchRequest != null) {
-                    this.executeLaunchRequest(launchRequest, false);
+                    await this.executeLaunchRequest(launchRequest, false);
                     debug_count++;
                 } else {
-                    this.addProcess(command.stdout, rosSpawnOptions);
+                    this.addProcess(nodes[index], command.stdout, rosSpawnOptions);
                 }
-            });
+            }));
             if (debug_count !== 0) {
                 this.startProcesses();
             }
